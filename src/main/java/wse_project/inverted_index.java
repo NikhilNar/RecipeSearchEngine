@@ -6,10 +6,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -32,7 +29,7 @@ class FrequencyDocIdsMapping implements Comparable<FrequencyDocIdsMapping>{
 
     @Override
     public int compareTo(FrequencyDocIdsMapping frequencyDocIdsMapping) {
-        return getFrequency() - frequencyDocIdsMapping.getFrequency();
+        return frequencyDocIdsMapping.getFrequency() - getFrequency();
     }
 }
 
@@ -167,7 +164,7 @@ class InvertedIndex {
 
     public static void main(String[] args) {
         long startTime = System.currentTimeMillis();
-        InvertedIndex index = new InvertedIndex("./sorted.gz", "./lexiconTier1.gz", "./lexiconTier2.gz", "./invertedIndexTier1", "./invertedIndexTier2", 70.0);
+        InvertedIndex index = new InvertedIndex("./sorted.gz", "./lexiconTier1.gz", "./lexiconTier2.gz", "./invertedIndexTier1", "./invertedIndexTier2", 30.0);
         if (index.ifLexiconAndInvertedIndexDocumentCreated())
             index.createIndex();
         System.out.println("Total time =" + (System.currentTimeMillis() - startTime) / 60000.0);

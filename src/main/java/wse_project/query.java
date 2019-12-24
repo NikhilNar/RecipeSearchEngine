@@ -1,4 +1,4 @@
-package web_indexing;
+package wse_project;
 
 import java.io.IOException;
 import java.io.FileInputStream;
@@ -43,7 +43,7 @@ class Posting {
 class PostingList {
     private List<Integer> docIds;
     private List<Integer> frequencies;
-    private Integer index;
+    private Integer index; // current pointer to the list
 
     PostingList() {
         docIds = new ArrayList();
@@ -182,16 +182,17 @@ class SearchResult implements Comparable<SearchResult> {
 class URLMapping {
     private String url;
     private Integer totalTermsCount;
-    private String documentFileName;
-    private Integer offset;
-    private Integer size;
+    //use these parameters only if we are generating snippets
+//    private String documentFileName;
+//    private Integer offset;
+//    private Integer size;
 
-    URLMapping(String url, Integer totalTermsCount, String documentFileName, Integer offset, Integer size) {
+    URLMapping(String url, Integer totalTermsCount) {
         this.url = url;
         this.totalTermsCount = totalTermsCount;
-        this.documentFileName = documentFileName;
-        this.offset = offset;
-        this.size = size;
+//        this.documentFileName = documentFileName;
+//        this.offset = offset;
+//        this.size = size;
     }
 
     public String getUrl() {
@@ -202,39 +203,51 @@ class URLMapping {
         return totalTermsCount;
     }
 
-    public String getDocumentFileName() {
-        return documentFileName;
-    }
-
-    public Integer getOffset() {
-        return offset;
-    }
-
-    public Integer getSize() {
-        return size;
-    }
+//    public String getDocumentFileName() {
+//        return documentFileName;
+//    }
+//
+//    public Integer getOffset() {
+//        return offset;
+//    }
+//
+//    public Integer getSize() {
+//        return size;
+//    }
 }
 
 class Query {
     // stores the mapping of terms and the offset of the inverted index
-    private HashMap<String, Posting> lexiconMap;
+    private HashMap<String, Posting> lexiconMapTier1;
+    private HashMap<String, Posting> lexiconMapTier2;
     // stores docid to url mapping
     private HashMap<Integer, URLMapping> docIdToUrlMap;
     // stores the maximum no of results that should be returned
     private Integer totalResults;
-    private String invertedIndexPath;
+    private String invertedIndexPathTier1;
+    private String invertedIndexPathTier2;
     // stores the total terms in all the documents
     private Integer totalDocumentsTerms;
 
-    Query(Integer totalResults, String invertedIndexPath) {
-        lexiconMap = new HashMap();
+    Query(Integer totalResults, String invertedIndexPathTier1, String invertedIndexPathTier2) {
+        lexiconMapTier1 = new HashMap();
+        lexiconMapTier2 = new HashMap();
         docIdToUrlMap = new HashMap();
         this.totalResults = totalResults;
-        this.invertedIndexPath = invertedIndexPath;
+        this.invertedIndexPathTier1 = invertedIndexPathTier1;
+        this.invertedIndexPathTier2 = invertedIndexPathTier2;
         this.totalDocumentsTerms = 0;
     }
 
-    public void buildLexicon(String fileName) {
+    public HashMap<String, Posting> getLexiconMapTier1(){
+        return lexiconMapTier1;
+    }
+
+    public HashMap<String, Posting> getLexiconMapTier2(){
+        return lexiconMapTier2;
+    }
+
+    public void buildLexicon(String fileName, HashMap<String, Posting> tier) {
         try {
             GZIPInputStream lexiconFile = new GZIPInputStream(new FileInputStream(fileName));
             BufferedReader br = new BufferedReader(new InputStreamReader(lexiconFile));
@@ -246,12 +259,13 @@ class Query {
                     Integer offset = Integer.parseInt(lexiconValues[1]) - 1;
                     Integer size = Integer.parseInt(lexiconValues[2]);
                     Integer count = Integer.parseInt(lexiconValues[3]);
-                    lexiconMap.put(term, new Posting(offset, size, count));
+                    tier.put(term, new Posting(offset, size, count));
                 }
             }
-            System.out.println("lexicon map size = " + lexiconMap.size());
+            System.out.println("lexicon map size = " + tier.size());
             lexiconFile.close();
         } catch (IOException e) {
+            e.printStackTrace();
             System.out.println("Unable to read content from file");
         }
     }
@@ -263,16 +277,17 @@ class Query {
             String currentTerm = null;
             while ((currentTerm = br.readLine()) != null) {
                 String[] docIdsToUrlMappingValues = currentTerm.split(" ");
-                if (docIdsToUrlMappingValues.length == 6) {
+                if (docIdsToUrlMappingValues.length == 3) {
                     Integer docId = Integer.parseInt(docIdsToUrlMappingValues[0]);
                     String url = docIdsToUrlMappingValues[1];
                     Integer totalTermsCount = Integer.parseInt(docIdsToUrlMappingValues[2]);
-                    String documentFileName = docIdsToUrlMappingValues[3];
+                    //String documentFileName = docIdsToUrlMappingValues[3];
                     try {
-                        Integer offset = Integer.parseInt(docIdsToUrlMappingValues[4]) - 1;
-                        Integer size = Integer.parseInt(docIdsToUrlMappingValues[5]);
-                        totalDocumentsTerms += totalTermsCount;
-                        docIdToUrlMap.put(docId, new URLMapping(url, totalTermsCount, documentFileName, offset, size));
+                        //Integer offset = Integer.parseInt(docIdsToUrlMappingValues[4]) - 1;
+                        //Integer size = Integer.parseInt(docIdsToUrlMappingValues[5]);
+                        //totalDocumentsTerms += totalTermsCount;
+                        //docIdToUrlMap.put(docId, new URLMapping(url, totalTermsCount, documentFileName, offset, size));
+                        docIdToUrlMap.put(docId, new URLMapping(url, totalTermsCount));
                     } catch (Exception e) {
                         System.out.println("Exception caught" + e);
                     }
@@ -369,22 +384,22 @@ class Query {
         return snippetContent.substring(0, Math.min(497, snippetContent.length())) + "...";
     }
 
-    public void generateSnippet(SearchResult sr, String[] words) {
-        URLMapping um = docIdToUrlMap.get(sr.getDocumentId());
-        try {
-            RandomAccessFile invertedIndexFile = new RandomAccessFile(um.getDocumentFileName(), "r");
-            invertedIndexFile.seek(um.getOffset());
-            byte[] byteArray = new byte[um.getSize()];
-            invertedIndexFile.read(byteArray);
-            String content = new String(byteArray);
-            String snippet = createSnippet(content, words);
-            sr.setSnippet(snippet);
-            invertedIndexFile.close();
-        } catch (IOException e) {
-            System.out.println("Unable to read file");
-        }
-
-    }
+//    public void generateSnippet(SearchResult sr, String[] words) {
+//        URLMapping um = docIdToUrlMap.get(sr.getDocumentId());
+//        try {
+//            RandomAccessFile invertedIndexFile = new RandomAccessFile(um.getDocumentFileName(), "r");
+//            invertedIndexFile.seek(um.getOffset());
+//            byte[] byteArray = new byte[um.getSize()];
+//            invertedIndexFile.read(byteArray);
+//            String content = new String(byteArray);
+//            String snippet = createSnippet(content, words);
+//            sr.setSnippet(snippet);
+//            invertedIndexFile.close();
+//        } catch (IOException e) {
+//            System.out.println("Unable to read file");
+//        }
+//
+//    }
 
     public void findConjunctiveResults(List<PostingList> postingLists, PriorityQueue<SearchResult> result) {
         HashMap<Integer, Integer[]> distinctDocIdsFreqMap = new HashMap();
@@ -477,6 +492,7 @@ class Query {
     }
 
     public List<SearchResult> getSearchResults(String keyword, String queryType) {
+        // TODO: @Alex Call your threshold algorithm here
         PriorityQueue<SearchResult> result = new PriorityQueue();
         String[] words = keyword.split(" ");
         List<PostingList> postingLists = new ArrayList();
@@ -485,12 +501,12 @@ class Query {
                 continue;
             }
             PostingList pl = null;
-            Posting p = lexiconMap.get(word);
+            Posting p = lexiconMapTier1.get(word);
             if (p != null) {
                 Integer offset = p.getOffset();
                 Integer size = p.getSize();
                 pl = new PostingList();
-                pl.createPostings(invertedIndexPath, offset, size);
+                pl.createPostings(invertedIndexPathTier1, offset, size);
             }
             postingLists.add(pl);
         }
@@ -504,7 +520,7 @@ class Query {
         List<SearchResult> finalListOfUrls = new ArrayList();
         while (result.size() > 0) {
             SearchResult sr = result.poll();
-            generateSnippet(sr, words);
+            //generateSnippet(sr, words);
             finalListOfUrls.add(sr);
         }
         Collections.sort(finalListOfUrls, Collections.reverseOrder());
@@ -516,8 +532,9 @@ class Query {
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
         System.out.print("Enter the max no of results that should be returned : ");
         String records = br.readLine();
-        Query query = new Query(Integer.parseInt(records), "./invertedIndex");
-        query.buildLexicon("./lexicon.gz");
+        Query query = new Query(Integer.parseInt(records), "./invertedIndexTier1", "./invertedIndexTier2");
+        query.buildLexicon("./lexiconTier1.gz", query.getLexiconMapTier1());
+        query.buildLexicon("./lexiconTier2.gz", query.getLexiconMapTier2());
         query.buildDocIdsToUrlMapping("./url_doc_mapping.gz");
 
         while (true) {
