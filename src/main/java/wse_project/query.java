@@ -493,6 +493,7 @@ class Query {
 
     public List<SearchResult> getSearchResults(String keyword, String queryType) {
         // TODO: @Alex Call your threshold algorithm here
+
         PriorityQueue<SearchResult> result = new PriorityQueue();
         String[] words = keyword.split(" ");
         List<PostingList> postingLists = new ArrayList();
@@ -532,10 +533,10 @@ class Query {
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
         System.out.print("Enter the max no of results that should be returned : ");
         String records = br.readLine();
-        Query query = new Query(Integer.parseInt(records), "./invertedIndexTier1", "./invertedIndexTier2");
-        query.buildLexicon("./lexiconTier1.gz", query.getLexiconMapTier1());
-        query.buildLexicon("./lexiconTier2.gz", query.getLexiconMapTier2());
-        query.buildDocIdsToUrlMapping("./url_doc_mapping.gz");
+        Query query = new Query(Integer.parseInt(records), "data/2_index/invertedIndexTier1", "data/2_index/invertedIndexTier2");
+        query.buildLexicon("data/2_index/lexiconTier1.gz", query.getLexiconMapTier1());
+        query.buildLexicon("data/2_indexlexiconTier2.gz", query.getLexiconMapTier2());
+        query.buildDocIdsToUrlMapping("data/2_index/url_doc_mapping.gz");
 
         while (true) {
 
