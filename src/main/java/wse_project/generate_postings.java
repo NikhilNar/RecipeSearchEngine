@@ -82,7 +82,7 @@ class GeneratePostings {
         try(FileReader reader = new FileReader(jsonDatasetPath)){
             Object obj = jsonParser.parse(reader);
             JSONArray recipeList = (JSONArray) obj;
-            String postingsFileName = postingsDirectory.getName() + "data/1_intermediate/postings/postings.gz";
+            String postingsFileName = "data/1_intermediate/postings/postings.gz";
             GZIPOutputStream gzos = new GZIPOutputStream(
                     new FileOutputStream(postingsFileName));
 

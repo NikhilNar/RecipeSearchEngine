@@ -164,7 +164,11 @@ class InvertedIndex {
 
     public static void main(String[] args) {
         long startTime = System.currentTimeMillis();
-        InvertedIndex index = new InvertedIndex("data/1_intermediate/postings/sorted.gz", "data/2_index/lexiconTier1.gz", "data/2_index/lexiconTier2.gz", "data/2_index/invertedIndexTier1", "data/2_index/invertedIndexTier2", 30.0);
+
+        // :tier_1_split:   defines percentage of term lists to be included in Tier 1
+        double tier_1_split = 30.0;
+
+        InvertedIndex index = new InvertedIndex("data/1_intermediate/postings/sorted.gz", "data/2_index/lexiconTier1.gz", "data/2_index/lexiconTier2.gz", "data/2_index/invertedIndexTier1", "data/2_index/invertedIndexTier2", tier_1_split);
         if (index.ifLexiconAndInvertedIndexDocumentCreated())
             index.createIndex();
         System.out.println("Total time =" + (System.currentTimeMillis() - startTime) / 60000.0);
