@@ -9,45 +9,39 @@ import java.io.InputStreamReader;
 import java.util.*;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
+//
+//class FrequencyDocIdsMapping implements Comparable<FrequencyDocIdsMapping>{
+//    private Integer frequency;
+//    private Long docId;
+//
+//    FrequencyDocIdsMapping(Integer frequency, Long docId){
+//        this.frequency = frequency;
+//        this.docId = docId;
+//    }
+//
+//    public Integer getFrequency(){
+//        return frequency;
+//    }
+//
+//    public Long getDocId(){
+//        return docId;
+//    }
+//
+//    @Override
+//    public int compareTo(FrequencyDocIdsMapping frequencyDocIdsMapping) {
+//        return frequencyDocIdsMapping.getFrequency() - getFrequency();
+//    }
+//}
 
-class FrequencyDocIdsMapping implements Comparable<FrequencyDocIdsMapping>{
-    private Integer frequency;
-    private Long docId;
-
-    FrequencyDocIdsMapping(Integer frequency, Long docId){
-        this.frequency = frequency;
-        this.docId = docId;
-    }
-
-    public Integer getFrequency(){
-        return frequency;
-    }
-
-    public Long getDocId(){
-        return docId;
-    }
-
-    @Override
-    public int compareTo(FrequencyDocIdsMapping frequencyDocIdsMapping) {
-        return frequencyDocIdsMapping.getFrequency() - getFrequency();
-    }
-}
-
-class InvertedIndex {
-    private GZIPOutputStream lexiconTier1;
-    private GZIPOutputStream lexiconTier2;
-    private FileOutputStream invertedIndexTier1;
-    private FileOutputStream invertedIndexTier2;
+class InvertedIndexSingleTier {
+    private GZIPOutputStream lexiconSingleTier;
+    private FileOutputStream invertedIndexSingleTier;
     private GZIPInputStream sortedTermsFile;
-    private Double tier1Percentage;
 
-    InvertedIndex(String sortedTermsFilePath, String lexiconTier1FilePath, String lexiconTier2FilePath, String invertedIndexTier1Path, String invertedIndexTier2Path, Double tier1Percentage) {
-        this.lexiconTier1 = createGzipFile(lexiconTier1FilePath);
-        this.lexiconTier2 = createGzipFile(lexiconTier2FilePath);
-        this.invertedIndexTier1 = createFile(invertedIndexTier1Path);
-        this.invertedIndexTier2 = createFile(invertedIndexTier2Path);
+    InvertedIndexSingleTier(String sortedTermsFilePath, String lexiconSingleTierFilePath, String invertedIndexSingleTierPath) {
+        this.lexiconSingleTier = createGzipFile(lexiconSingleTierFilePath);
+        this.invertedIndexSingleTier = createFile(invertedIndexSingleTierPath);
         this.sortedTermsFile = openTermsFile(sortedTermsFilePath);
-        this.tier1Percentage = tier1Percentage;
     }
 
     private FileOutputStream createFile(String fileName) {
@@ -78,7 +72,7 @@ class InvertedIndex {
     }
 
     public Boolean ifLexiconAndInvertedIndexDocumentCreated() {
-        return lexiconTier1 != null && lexiconTier2 != null && invertedIndexTier1 != null && invertedIndexTier2 != null && sortedTermsFile != null;
+        return lexiconSingleTier != null && invertedIndexSingleTier != null && sortedTermsFile != null;
     }
 
     public String findVarByte(Long number) {
@@ -115,48 +109,35 @@ class InvertedIndex {
             BufferedReader br = new BufferedReader(new InputStreamReader(sortedTermsFile));
             String previousTerm = null, currentTerm = null;
             ArrayList<FrequencyDocIdsMapping> frequencyDocIdsMappingList = new ArrayList();
-            Integer totalBytesTier1 = 0, totalBytesTier2 = 0;
+            Integer totalBytesSingleTier = 0;
             while ((currentTerm = br.readLine()) != null) {
                 String[] posting = currentTerm.split(" ");
                 if (posting[0].equals(previousTerm) || previousTerm == null) {
                     frequencyDocIdsMappingList.add(new FrequencyDocIdsMapping(Integer.parseInt(posting[2]), Long.parseLong(posting[1])));
                 } else {
                     Collections.sort(frequencyDocIdsMappingList);
-                    Integer tier1Length = Double.valueOf(Math.ceil(frequencyDocIdsMappingList.size()*tier1Percentage/100.0)).intValue();
+                    Integer singleTierLength = Double.valueOf(Math.ceil(frequencyDocIdsMappingList.size())).intValue();
                     StringBuffer totalBytesDocIdsFreqs = new StringBuffer();
-                    for(int i=0; i< tier1Length;i++){
+                    for(int i=0; i< singleTierLength;i++){
                         totalBytesDocIdsFreqs.append(findVarByte((Long.valueOf(frequencyDocIdsMappingList.get(i).getFrequency()))));
                         totalBytesDocIdsFreqs.append(findVarByte(frequencyDocIdsMappingList.get(i).getDocId()));
                     }
                     byte[] bytesForTerm = totalBytesDocIdsFreqs.toString().getBytes();
                     Integer totalBytesForTerm = bytesForTerm.length;
-                    invertedIndexTier1.write(bytesForTerm);
-                    lexiconTier1.write((previousTerm + " " + (totalBytesTier1 + 1) + " " + totalBytesForTerm + " "
-                            + tier1Length + " \n").getBytes());
-                    totalBytesTier1 += totalBytesForTerm;
+                    invertedIndexSingleTier.write(bytesForTerm);
+                    lexiconSingleTier.write((previousTerm + " " + (totalBytesSingleTier + 1) + " " + totalBytesForTerm + " "
+                            + singleTierLength + " \n").getBytes());
+                    totalBytesSingleTier += totalBytesForTerm;
                     totalBytesDocIdsFreqs = new StringBuffer();
-                    for(int i=tier1Length; i< frequencyDocIdsMappingList.size();i++){
-                        totalBytesDocIdsFreqs.append(findVarByte((Long.valueOf(frequencyDocIdsMappingList.get(i).getFrequency()))));
-                        totalBytesDocIdsFreqs.append(findVarByte(frequencyDocIdsMappingList.get(i).getDocId()));
-                    }
-                    bytesForTerm = totalBytesDocIdsFreqs.toString().getBytes();
-                    totalBytesForTerm = bytesForTerm.length;
-                    invertedIndexTier2.write(bytesForTerm);
-                    lexiconTier2.write((previousTerm + " " + (totalBytesTier2 + 1) + " " + totalBytesForTerm + " "
-                            + (frequencyDocIdsMappingList.size() - tier1Length) + " \n").getBytes());
-                    totalBytesTier2 += totalBytesForTerm;
                     frequencyDocIdsMappingList.clear();
                     frequencyDocIdsMappingList.add(new FrequencyDocIdsMapping(Integer.parseInt(posting[2]), Long.parseLong(posting[1])));
                 }
                 previousTerm = posting[0];
             }
             sortedTermsFile.close();
-            invertedIndexTier1.close();
-            invertedIndexTier2.close();
-            lexiconTier1.finish();
-            lexiconTier1.close();
-            lexiconTier2.finish();
-            lexiconTier2.close();
+            invertedIndexSingleTier.close();
+            lexiconSingleTier.finish();
+            lexiconSingleTier.close();
         } catch (IOException e) {
             System.out.println("Error while reading the input" + e);
         }
@@ -165,10 +146,7 @@ class InvertedIndex {
     public static void main(String[] args) {
         long startTime = System.currentTimeMillis();
 
-        // :tier_1_split:   defines percentage of term lists to be included in Tier 1
-        double tier_1_split = 20.0;
-
-        InvertedIndex index = new InvertedIndex("data/1_intermediate/postings/sorted.gz", "data/2_index/lexiconTier1.gz", "data/2_index/lexiconTier2.gz", "data/2_index/invertedIndexTier1", "data/2_index/invertedIndexTier2", tier_1_split);
+        InvertedIndexSingleTier index = new InvertedIndexSingleTier("data/1_intermediate/postings/sorted.gz", "data/2_index/lexiconSingleTier.gz", "data/2_index/invertedIndexSingleTier");
         if (index.ifLexiconAndInvertedIndexDocumentCreated())
             index.createIndex();
         System.out.println("Total time =" + (System.currentTimeMillis() - startTime) / 60000.0);

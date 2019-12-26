@@ -92,7 +92,7 @@ public class GenerateQuery {
     }
 
     public static void main(String[] args){
-        GenerateQuery gq = new GenerateQuery("./sorted.gz", "./queries.gz");
+        GenerateQuery gq = new GenerateQuery("data/1_intermediate/postings/sorted.gz", "data/1_intermediate/queries/queries.gz");
         gq.generateQueries();
     }
 }
