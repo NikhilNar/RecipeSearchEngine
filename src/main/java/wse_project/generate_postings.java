@@ -26,7 +26,7 @@ class GeneratePostings {
 
     private GZIPOutputStream createUrlToDocMapping() {
         try {
-            return new GZIPOutputStream(new FileOutputStream("./url_doc_mapping.gz"));
+            return new GZIPOutputStream(new FileOutputStream("data/2_index/url_doc_mapping.gz"));
         } catch (IOException e) {
             System.out.println("Unable to create URL to Doc Mapping file");
         }
@@ -82,7 +82,7 @@ class GeneratePostings {
         try(FileReader reader = new FileReader(jsonDatasetPath)){
             Object obj = jsonParser.parse(reader);
             JSONArray recipeList = (JSONArray) obj;
-            String postingsFileName = postingsDirectory.getName() + "/postings.gz";
+            String postingsFileName = "data/1_intermediate/postings/postings.gz";
             GZIPOutputStream gzos = new GZIPOutputStream(
                     new FileOutputStream(postingsFileName));
 
@@ -140,7 +140,7 @@ class GeneratePostings {
 
     public static void main(String[] args) {
         long startTime = System.currentTimeMillis();
-        GeneratePostings gp = new GeneratePostings("./crawled_formatted_data.json", "./postings");
+        GeneratePostings gp = new GeneratePostings("data/0_crawl/crawled_formatted_data.json", "data/1_intermediate/postings");
         if (gp.ifDirectoryAndMappingDocumentCreated())
             gp.createPostings();
         System.out.println("Total time =" + (System.currentTimeMillis() - startTime) / 60000.0);
