@@ -1,12 +1,9 @@
 package wse_project;
 
-import java.io.IOException;
-import java.io.FileInputStream;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.io.RandomAccessFile;
+import java.io.*;
 import java.util.*;
 import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 // stores the postings that are generated from the terms in the queries
 class Term {
@@ -45,8 +42,8 @@ class termList {
         int j = 0;
         for (int i = 0; i < decodings.length; i++) {
             decodings[i] = varByteEncoding.substring(j, j + 8);
-            j += 8; }
-
+            j += 8;
+        }
         return decodings;
     }
 
@@ -59,10 +56,6 @@ class termList {
         }
         return null;
     }
-
-    public void printDocIDs() { for (Integer i : this.docIDs) System.out.println(i); }
-
-    public void printFreqs() { for (Integer i : this.freqs) System.out.println(i); }
 
     public Integer getDocIDsSize() {
         return docIDs.size();
@@ -114,14 +107,12 @@ class SearchResult implements Comparable<SearchResult> {
     private String url;
     private Integer documentId;
     private Double score;
-    private String snippet;
     private ArrayList<Integer> wordsFrequenciesList;
 
-    SearchResult(String url, Integer documentId, Double score, String snippet) {
+    SearchResult(String url, Integer documentId, Double score) {
         this.url = url;
         this.documentId = documentId;
         this.score = score;
-        this.snippet = snippet;
         wordsFrequenciesList = new ArrayList();
     }
 
@@ -133,20 +124,12 @@ class SearchResult implements Comparable<SearchResult> {
         return score;
     }
 
-    public String getSnippet() {
-        return snippet;
-    }
-
     public Integer getDocumentId() {
         return documentId;
     }
 
     public ArrayList<Integer> getWordsFrequenciesList() {
         return wordsFrequenciesList;
-    }
-
-    public void setSnippet(String snippet) {
-        this.snippet = snippet;
     }
 
     public void setWordsFrequenciesList(ArrayList<Integer> wordsFrequenciesList) {
@@ -169,48 +152,33 @@ class URLMapping {
     URLMapping(String url, Integer totalTermsCount) {
         this.url = url;
         this.totalTermsCount = totalTermsCount;
-
     }
 
-    public String getUrl() {
-        return url;
-    }
+    public String getUrl() { return url; }
 
-    public Integer getTotalTermsCount() {
-        return totalTermsCount;
-    }
+    public Integer getTotalTermsCount() { return totalTermsCount; }
 }
 
 class Query_MultiTier {
-    // stores the mapping of terms and the offset of the inverted index
     private HashMap<String, Term> lexiconMapTier1;
     private HashMap<String, Term> lexiconMapTier2;
-    // stores docid to url mapping
     private HashMap<Integer, URLMapping> docIDToUrlMap;
-    // stores the maximum no of results that should be returned
-    private Integer totalResults;
-    private String invertedIndexPathTier1;
-    private String invertedIndexPathTier2;
-    // stores the total terms in all the documents
-    private Integer totalDocumentsTerms;
+    private Integer totalResults, totalDocumentsTerms;
+    private String invertedIndexPathTier1, invertedIndexPathTier2;
 
     Query_MultiTier(Integer totalResults, String invertedIndexPathTier1, String invertedIndexPathTier2) {
-        lexiconMapTier1 = new HashMap();
-        lexiconMapTier2 = new HashMap();
-        docIDToUrlMap = new HashMap();
+        this.lexiconMapTier1 = new HashMap();
+        this.lexiconMapTier2 = new HashMap();
+        this.docIDToUrlMap = new HashMap();
         this.totalResults = totalResults;
         this.invertedIndexPathTier1 = invertedIndexPathTier1;
         this.invertedIndexPathTier2 = invertedIndexPathTier2;
         this.totalDocumentsTerms = 0;
     }
 
-    public HashMap<String, Term> getLexiconMapTier1(){
-        return lexiconMapTier1;
-    }
+    public HashMap<String, Term> getLexiconMapTier1(){ return lexiconMapTier1; }
 
-    public HashMap<String, Term> getLexiconMapTier2(){
-        return lexiconMapTier2;
-    }
+    public HashMap<String, Term> getLexiconMapTier2(){ return lexiconMapTier2; }
 
     public void buildLexicon(String fileName, HashMap<String, Term> tier) {
         try {
@@ -227,7 +195,6 @@ class Query_MultiTier {
                     tier.put(term, new Term(offset, size, count));
                 }
             }
-            System.out.println("lexicon map size = " + tier.size());
             lexiconFile.close();
         } catch (IOException e) {
             e.printStackTrace();
@@ -246,119 +213,23 @@ class Query_MultiTier {
                     Integer docId = Integer.parseInt(docIDsToUrlMappingValues[0]);
                     String url = docIDsToUrlMappingValues[1];
                     Integer totalTermsCount = Integer.parseInt(docIDsToUrlMappingValues[2]);
-                    //String documentFileName = docIdsToUrlMappingValues[3];
                     try {
-                        //Integer offset = Integer.parseInt(docIdsToUrlMappingValues[4]) - 1;
-                        //Integer size = Integer.parseInt(docIdsToUrlMappingValues[5]);
-                        //totalDocumentsTerms += totalTermsCount;
-                        //docIdToUrlMap.put(docId, new URLMapping(url, totalTermsCount, documentFileName, offset, size));
                         docIDToUrlMap.put(docId, new URLMapping(url, totalTermsCount));
                     } catch (Exception e) {
                         System.out.println("Exception caught" + e);
                     }
-
                 }
             }
-            System.out.println("buildDocIdsToUrl mapping size = " + docIDToUrlMap.size());
             lexiconFile.close();
-        } catch (IOException e) {
-            System.out.println("Unable to read content from file");
-        }
-
+        } catch (IOException e) { System.out.println("Unable to read content from file"); }
     }
 
-    public Double calculateBM25(ArrayList<Integer> ft, ArrayList<Integer> fdt, Integer modd) {
-        Double score = 0.0;
-        Integer N = docIDToUrlMap.size();
-        Double moddavg = (double) totalDocumentsTerms / N;
-        double k1 = 1.2, b = 0.75;
-        for (int i = 0; i < ft.size(); i++) {
-            Double logarithmicTerm = (N - ft.get(i) + 0.5) / (ft.get(i) + 0.5);
-            Double K = k1 * ((1 - b) + b * modd / moddavg);
-            Double secondTerm = (k1 + 1) * fdt.get(i) / (K + fdt.get(i));
-            score += Math.log(logarithmicTerm) * secondTerm;
-        }
-        return score;
-    }
-
-    // used to find the index of the capital letter for snippet generation
-    public int lastCapitalIndex(String content) {
-        int index = 0;
-        for (int i = content.length() - 1; i >= 0; i--) {
-            char letter = content.charAt(i);
-            if (Character.isUpperCase(letter) && (i + 1 <= content.length()
-                    && (Character.isLowerCase(content.charAt(i + 1)) || content.charAt(i + 1) == ' '))) {
-                return i;
-            }
-        }
-        return index;
-    }
-
-    // refer document for details regarding the implementation
-    public String createSnippet(String content, String[] words) {
-        String contentLowerCase = content.toLowerCase();
-        ArrayList<Integer> indices = new ArrayList();
-        LinkedList<Integer> queue = new LinkedList();
-        for (String word : words) {
-            if (word.length() == 0) {
-                continue;
-            }
-            int index = contentLowerCase.indexOf(word);
-            if (index >= 0) {
-                indices.add(index);
-            }
-            while (index >= 0) {
-                index = contentLowerCase.indexOf(word, index + word.length());
-                if (index >= 0) {
-                    indices.add(index);
-                }
-            }
-        }
-        Collections.sort(indices);
-        int startIndex = indices.get(0), endIndex = startIndex, maxIndices = 1, noOfCharsDiff = 300, diffInQueue = 0;
-        queue.add(startIndex);
-        for (int i = 1; i < indices.size() - 1; i++) {
-            Integer diff = indices.get(i) - indices.get(i - 1);
-            while (diffInQueue + diff > noOfCharsDiff && queue.size() > 0) {
-                int diffAfterRemoval = 0;
-                int removedValue = queue.poll();
-                if (queue.size() > 1) {
-                    diffAfterRemoval = queue.get(0) - removedValue;
-                }
-                diffInQueue -= diffAfterRemoval;
-            }
-            queue.add(indices.get(i));
-            if (queue.size() > maxIndices) {
-                startIndex = queue.get(0);
-                endIndex = queue.get(queue.size() - 1);
-                maxIndices = queue.size();
-            }
-        }
-        String start = "";
-        String preIndex = content.substring(0, startIndex);
-        int preIndexValue = -1;
-        if ((preIndexValue = preIndex.lastIndexOf(".")) > 0) {
-            start = content.substring(preIndexValue + 1, startIndex);
-        } else {
-            start = content.substring(lastCapitalIndex(content.substring(0, startIndex)), startIndex);
-        }
-
-        String snippetContent = start + content.substring(startIndex);
-
-        return snippetContent.substring(0, Math.min(497, snippetContent.length())) + "...";
-    }
-
-    public ArrayList<Integer> getSearchResults_MultiTier(String query, Integer k) {
+    public ArrayList<Integer> getSearchResults_MultiTier(String query, Integer k) throws IOException {
         ArrayList<ArrayList<Integer>> docIDLists = new ArrayList();
         ArrayList<ArrayList<Integer>> freqLists = new ArrayList();
+        SearchNode_MultiTier searchnode_multi = new SearchNode_MultiTier();
 
-        SearchNode_MultiTier test = new SearchNode_MultiTier();
-
-        ArrayList<Integer> results;
-        results = test.thresholdAlgo(k, query, lexiconMapTier1, lexiconMapTier2, invertedIndexPathTier1, invertedIndexPathTier2);
-//        for (int i : results) System.out.println("result: " + i);
-
-        return results;
+        return searchnode_multi.thresholdAlgo(k, query, this.lexiconMapTier1, this.lexiconMapTier2, this.invertedIndexPathTier1, this.invertedIndexPathTier2);
     }
 
     public static void main(String[] args) throws IOException { return; }
@@ -367,13 +238,12 @@ class Query_MultiTier {
 class Query_SingleTier {
     private HashMap<String, Term> lexiconMapSingleTier;
     private HashMap<Integer, URLMapping> docIDToUrlMap;
-    private Integer totalResults;
+    private Integer totalResults, totalDocumentsTerms;
     private String invertedIndexPathSingleTier;
-    private Integer totalDocumentsTerms;
 
     Query_SingleTier(Integer totalResults, String invertedIndexPathSingleTier) {
-        lexiconMapSingleTier = new HashMap();
-        docIDToUrlMap = new HashMap();
+        this.lexiconMapSingleTier = new HashMap();
+        this.docIDToUrlMap = new HashMap();
         this.totalResults = totalResults;
         this.invertedIndexPathSingleTier = invertedIndexPathSingleTier;
         this.totalDocumentsTerms = 0;
@@ -397,7 +267,6 @@ class Query_SingleTier {
                     lexicon.put(term, new Term(offset, size, count));
                 }
             }
-            System.out.println("lexicon map size = " + lexicon.size());
             lexiconFile.close();
         } catch (IOException e) {
             e.printStackTrace();
@@ -421,10 +290,8 @@ class Query_SingleTier {
                     } catch (Exception e) {
                         System.out.println("Exception caught" + e);
                     }
-
                 }
             }
-            System.out.println("buildDocIdsToUrl mapping size = " + docIDToUrlMap.size());
             lexiconFile.close();
         } catch (IOException e) {
             System.out.println("Unable to read content from file");
@@ -432,106 +299,21 @@ class Query_SingleTier {
 
     }
 
-    public Double calculateBM25(ArrayList<Integer> ft, ArrayList<Integer> fdt, Integer modd) {
-        Double score = 0.0;
-        Integer N = docIDToUrlMap.size();
-        Double moddavg = (double) totalDocumentsTerms / N;
-        double k1 = 1.2, b = 0.75;
-        for (int i = 0; i < ft.size(); i++) {
-            Double logarithmicTerm = (N - ft.get(i) + 0.5) / (ft.get(i) + 0.5);
-            Double K = k1 * ((1 - b) + b * modd / moddavg);
-            Double secondTerm = (k1 + 1) * fdt.get(i) / (K + fdt.get(i));
-            score += Math.log(logarithmicTerm) * secondTerm;
-        }
-        return score;
-    }
-
-    // used to find the index of the capital letter for snippet generation
-    public int lastCapitalIndex(String content) {
-        int index = 0;
-        for (int i = content.length() - 1; i >= 0; i--) {
-            char letter = content.charAt(i);
-            if (Character.isUpperCase(letter) && (i + 1 <= content.length()
-                    && (Character.isLowerCase(content.charAt(i + 1)) || content.charAt(i + 1) == ' '))) {
-                return i;
-            }
-        }
-        return index;
-    }
-
-    // refer document for details regarding the implementation
-    public String createSnippet(String content, String[] words) {
-        String contentLowerCase = content.toLowerCase();
-        ArrayList<Integer> indices = new ArrayList();
-        LinkedList<Integer> queue = new LinkedList();
-        for (String word : words) {
-            if (word.length() == 0) {
-                continue;
-            }
-            int index = contentLowerCase.indexOf(word);
-            if (index >= 0) {
-                indices.add(index);
-            }
-            while (index >= 0) {
-                index = contentLowerCase.indexOf(word, index + word.length());
-                if (index >= 0) {
-                    indices.add(index);
-                }
-            }
-        }
-        Collections.sort(indices);
-        int startIndex = indices.get(0), endIndex = startIndex, maxIndices = 1, noOfCharsDiff = 300, diffInQueue = 0;
-        queue.add(startIndex);
-        for (int i = 1; i < indices.size() - 1; i++) {
-            Integer diff = indices.get(i) - indices.get(i - 1);
-            while (diffInQueue + diff > noOfCharsDiff && queue.size() > 0) {
-                int diffAfterRemoval = 0;
-                int removedValue = queue.poll();
-                if (queue.size() > 1) {
-                    diffAfterRemoval = queue.get(0) - removedValue;
-                }
-                diffInQueue -= diffAfterRemoval;
-            }
-            queue.add(indices.get(i));
-            if (queue.size() > maxIndices) {
-                startIndex = queue.get(0);
-                endIndex = queue.get(queue.size() - 1);
-                maxIndices = queue.size();
-            }
-        }
-        String start = "";
-        String preIndex = content.substring(0, startIndex);
-        int preIndexValue = -1;
-        if ((preIndexValue = preIndex.lastIndexOf(".")) > 0) {
-            start = content.substring(preIndexValue + 1, startIndex);
-        } else {
-            start = content.substring(lastCapitalIndex(content.substring(0, startIndex)), startIndex);
-        }
-
-        String snippetContent = start + content.substring(startIndex);
-
-        return snippetContent.substring(0, Math.min(497, snippetContent.length())) + "...";
-    }
-
     public ArrayList<Integer> getSearchResults_SingleTier(String query, Integer k) {
         ArrayList<ArrayList<Integer>> docIDLists = new ArrayList();
         ArrayList<ArrayList<Integer>> freqLists = new ArrayList();
 
-        SearchNode_SingleTier searcher = new SearchNode_SingleTier();
-
-        ArrayList<Integer> results;
-        results = searcher.thresholdAlgo(k, query, lexiconMapSingleTier, invertedIndexPathSingleTier);
-//        for (int i : results) System.out.println("result: " + i);
-
-        return results;
+        SearchNode_SingleTier searchnode_single = new SearchNode_SingleTier();
+        return searchnode_single.thresholdAlgo(k, query, lexiconMapSingleTier, invertedIndexPathSingleTier);
     }
 
     public static void main(String[] args) throws IOException { return; }
 }
 
-
 class MainQueryProgram {
+
     MainQueryProgram() { }
+
     public float average_precision(ArrayList<Integer> singleTierResults, ArrayList<Integer> multiTierResults) {
         float ap = 0.0f;
         int divisor = 0, num_true_pos = 0;
@@ -548,38 +330,96 @@ class MainQueryProgram {
     }
 
     public static void main(String[] args) throws IOException {
+        // DECLARE PATHS
+        String dataIndexDir = "data/2_index/";
+        String urlDocMappingPath = dataIndexDir + "url_doc_mapping.gz";
+        String queriesPath = "data/1_intermediate/queries/queries.gz";
+//        String queriesPath = "data/3_log/dnu_50_3terms_2/tier1_queries.txt";
+        String lexiconTier1Path = dataIndexDir + "lexiconTier1.gz";
+        String lexiconTier2Path = dataIndexDir + "lexiconTier2.gz";
+        String indexTier1Path = dataIndexDir + "invertedIndexTier1";
+        String indexTier2Path = dataIndexDir + "invertedIndexTier2";
+        String lexiconSingleTierPath = dataIndexDir + "lexiconSingleTier.gz";
+        String indexSingleTierPath = dataIndexDir + "invertedIndexSingleTier";
+
         MainQueryProgram query = new MainQueryProgram();
 
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-        System.out.print("Enter the max no of results that should be returned : ");
+        System.out.print("Enter target # of results to be returned: ");
         String records = br.readLine();
+        System.out.print("Enter [1] to execute batch query, or [0] to manually enter queries: ");
+        String batchQueryFlag = br.readLine();
 
-        Query_MultiTier query_multi = new Query_MultiTier(Integer.parseInt(records), "data/2_index/invertedIndexTier1", "data/2_index/invertedIndexTier2");
-        query_multi.buildLexicon("data/2_index/lexiconTier1.gz", query_multi.getLexiconMapTier1());
-        query_multi.buildLexicon("data/2_index/lexiconTier2.gz", query_multi.getLexiconMapTier2());
-        query_multi.buildDocIDsToUrlMapping("data/2_index/url_doc_mapping.gz");
+        // INITIALIZE QUERY NODES
+        Query_MultiTier query_multi = new Query_MultiTier(Integer.parseInt(records), indexTier1Path, indexTier2Path);
+        query_multi.buildLexicon(lexiconTier1Path, query_multi.getLexiconMapTier1());
+        query_multi.buildLexicon(lexiconTier2Path, query_multi.getLexiconMapTier2());
+        query_multi.buildDocIDsToUrlMapping(urlDocMappingPath);
 
-        Query_SingleTier query_single = new Query_SingleTier(Integer.parseInt(records), "data/2_index/invertedIndexSingleTier");
-        query_single.buildLexicon("data/2_index/lexiconSingleTier.gz", query_single.getLexiconMapSingleTier());
-        query_single.buildDocIDsToUrlMapping("data/2_index/url_doc_mapping.gz");
+        Query_SingleTier query_single = new Query_SingleTier(Integer.parseInt(records), indexSingleTierPath);
+        query_single.buildLexicon(lexiconSingleTierPath, query_single.getLexiconMapSingleTier());
+        query_single.buildDocIDsToUrlMapping(urlDocMappingPath);
 
-        while (true) {
-            System.out.print("Enter query or enter exit to quit : ");
-            String input = br.readLine();
-            if (input.equals("exit")) { break; }
+        GZIPInputStream queries = new GZIPInputStream(new FileInputStream(queriesPath));
+//        FileInputStream queries = new FileInputStream(queriesPath);
+        BufferedReader queries_br = new BufferedReader(new InputStreamReader(queries));
 
-            long startTime = System.currentTimeMillis();
-            ArrayList<Integer> results_multi = query_multi.getSearchResults_MultiTier(input, Integer.parseInt(records));
-            System.out.println("Mutli-Tier Query Time =" + (System.currentTimeMillis() - startTime) / 1000.0 + " s");
+        long startTime;
+        float mean_average_precision = 0.0f;
+        float multitier_time = 0.0f;
+        float singletier_time = 0.0f;
+        String current_query = null;
 
-            startTime = System.currentTimeMillis();
-            ArrayList<Integer> results_single = query_single.getSearchResults_SingleTier(input, Integer.parseInt(records));
-            System.out.println("Single-Tier Query Time =" + (System.currentTimeMillis() - startTime) / 1000.0 + " s");
+        if (batchQueryFlag.equals("1")) {
+            // BATCH EXECUTE QUERIES, MEASURE M.A.P.
+            // COMPARE QUERY TIME FOR SINGLE VS. MULTI-TIER
+            int i = 0;
+            while ((current_query = queries_br.readLine()) != null) {
+                if (i % 10 == 0) System.out.println("# of queries executed: " + i);
 
-            System.out.println("Average Precision (AP): " + query.average_precision(results_single, results_multi) + "\n\n");
+                startTime = System.currentTimeMillis();
+                ArrayList<Integer> results_multi = query_multi.getSearchResults_MultiTier(current_query, Integer.parseInt(records));
+                multitier_time += ((System.currentTimeMillis() - startTime) / 1000.0);
+                System.out.println("Mutli-Tier Query Time = " + (System.currentTimeMillis() - startTime) / 1000.0 + " s");
+                System.out.println("\t| # Results Returned: " + results_multi.size());
 
-//            System.out.println("Total time =" + (System.currentTimeMillis() - startTime) / 1000.0 + " s");
-//            System.out.println("\n\n\n\n\n");
+                startTime = System.currentTimeMillis();
+                ArrayList<Integer> results_single = query_single.getSearchResults_SingleTier(current_query, Integer.parseInt(records));
+                singletier_time += ((System.currentTimeMillis() - startTime) / 1000.0);
+                System.out.println("Single-Tier Query Time = " + (System.currentTimeMillis() - startTime) / 1000.0 + " s");
+                System.out.println("\t| # Results Returned: " + results_single.size() + "\n");
+                System.out.println("Average Precision (AP): " + query.average_precision(results_single, results_multi) + "\n\n");
+
+                mean_average_precision += query.average_precision(results_single, results_multi);
+                ++i;
+            }
+            mean_average_precision /= i;
+            System.out.println("Number of queries executed: " + i);
+            System.out.println("Mean Average Precision: " + mean_average_precision);
+            System.out.println("Multi-Tier/Single-Tier Query Execution Time Ratio : " + multitier_time/singletier_time);
+        } else if (batchQueryFlag.equals("0")) {
+            while (true) {
+                System.out.print("Enter query or enter exit to quit : ");
+                String input = br.readLine();
+                if (input.equals("exit")) { break; }
+
+                startTime = System.currentTimeMillis();
+                ArrayList<Integer> results_multi = query_multi.getSearchResults_MultiTier(input, Integer.parseInt(records));
+                System.out.println("Mutli-Tier Query Time = " + (System.currentTimeMillis() - startTime) / 1000.0 + " s");
+                System.out.println("\t| # Results Returned: " + results_multi.size());
+
+                startTime = System.currentTimeMillis();
+                ArrayList<Integer> results_single = query_single.getSearchResults_SingleTier(input, Integer.parseInt(records));
+                System.out.println("Single-Tier Query Time = " + (System.currentTimeMillis() - startTime) / 1000.0 + " s");
+                System.out.println("\t| # Results Returned: " + results_single.size() + "\n");
+
+//                for (Integer p : results_multi) System.out.println(p);
+//                for (Integer m : results_single) System.out.println(m);
+
+                System.out.println("Average Precision (AP): " + query.average_precision(results_single, results_multi) + "\n\n");
+            }
+        } else {
+            System.out.println("Invalid response.");
         }
         return;
     }

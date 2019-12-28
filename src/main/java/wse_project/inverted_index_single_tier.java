@@ -9,39 +9,35 @@ import java.io.InputStreamReader;
 import java.util.*;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
-//
-//class FrequencyDocIdsMapping implements Comparable<FrequencyDocIdsMapping>{
-//    private Integer frequency;
-//    private Long docId;
-//
-//    FrequencyDocIdsMapping(Integer frequency, Long docId){
-//        this.frequency = frequency;
-//        this.docId = docId;
-//    }
-//
-//    public Integer getFrequency(){
-//        return frequency;
-//    }
-//
-//    public Long getDocId(){
-//        return docId;
-//    }
-//
-//    @Override
-//    public int compareTo(FrequencyDocIdsMapping frequencyDocIdsMapping) {
-//        return frequencyDocIdsMapping.getFrequency() - getFrequency();
-//    }
-//}
 
 class InvertedIndexSingleTier {
     private GZIPOutputStream lexiconSingleTier;
     private FileOutputStream invertedIndexSingleTier;
     private GZIPInputStream sortedTermsFile;
 
+    private Integer total_num_docs;
+    private Integer len_doc;
+    private Integer docs_t;
+    private float len_doc_avg;
+    private float k1_param, b_param;
+
+    private HashMap<Integer, Integer> docIDToWordCountMap;
+    private HashMap<String, Integer> termToDocCountMap;
+
     InvertedIndexSingleTier(String sortedTermsFilePath, String lexiconSingleTierFilePath, String invertedIndexSingleTierPath) {
         this.lexiconSingleTier = createGzipFile(lexiconSingleTierFilePath);
         this.invertedIndexSingleTier = createFile(invertedIndexSingleTierPath);
         this.sortedTermsFile = openTermsFile(sortedTermsFilePath);
+
+        this.docIDToWordCountMap = new HashMap();
+        this.termToDocCountMap = new HashMap();
+
+        this.k1_param = 1.2f;
+        this.b_param = 0.75f;
+        this.len_doc_avg = 0;
+        this.total_num_docs = 0;
+        this.docs_t = 0;
+        this.len_doc = 0;
     }
 
     private FileOutputStream createFile(String fileName) {
@@ -60,6 +56,55 @@ class InvertedIndexSingleTier {
             System.out.println("Unable to create " + fileName);
         }
         return null;
+    }
+
+    public void buildTermToDocCountMap(String fileName) {
+        try {
+            GZIPInputStream sortedPostingsFile = new GZIPInputStream(new FileInputStream(fileName));
+            BufferedReader br = new BufferedReader(new InputStreamReader(sortedPostingsFile));
+            String row = null;
+            String prev_term = "";
+
+            while ((row = br.readLine()) != null) {
+                String[] row_entries = row.split(" ");
+                String cur_term = row_entries[0].toLowerCase();
+
+                if (cur_term.equals(prev_term)) {
+                    termToDocCountMap.replace(cur_term, termToDocCountMap.get(cur_term) + 1);
+                } else termToDocCountMap.put(cur_term, 1);
+                prev_term = cur_term;
+            }
+            sortedPostingsFile.close();
+        } catch (IOException e) { System.out.println("Unable to read content from file"); }
+    }
+
+    public void buildDocIDToWordCountMap(String fileName) {
+        try {
+            GZIPInputStream lexiconFile = new GZIPInputStream(new FileInputStream(fileName));
+            BufferedReader br = new BufferedReader(new InputStreamReader(lexiconFile));
+            String currentTerm = null;
+
+            while ((currentTerm = br.readLine()) != null) {
+                String[] docIDsToUrlMappingValues = currentTerm.split(" ");
+                if (docIDsToUrlMappingValues.length == 3) {
+                    Integer docId = Integer.parseInt(docIDsToUrlMappingValues[0]);
+                    Integer totalTermsCount = Integer.parseInt(docIDsToUrlMappingValues[2]);
+                    this.len_doc_avg += totalTermsCount;
+                    ++this.total_num_docs;
+                    try {
+                        docIDToWordCountMap.put(docId, totalTermsCount);
+                    } catch (Exception e) {
+                        System.out.println("Exception caught" + e);
+                    }
+                }
+            }
+            this.len_doc_avg /= this.total_num_docs;
+            System.out.println("Total num docs: " + this.total_num_docs);
+            System.out.println("Avg Doc Len: " + this.len_doc_avg);
+
+            System.out.println("buildDocIdsToWordCount mapping size = " + docIDToWordCountMap.size());
+            lexiconFile.close();
+        } catch (IOException e) { System.out.println("Unable to read content from file"); }
     }
 
     private GZIPOutputStream createGzipFile(String fileName) {
@@ -112,8 +157,11 @@ class InvertedIndexSingleTier {
             Integer totalBytesSingleTier = 0;
             while ((currentTerm = br.readLine()) != null) {
                 String[] posting = currentTerm.split(" ");
+                this.len_doc = docIDToWordCountMap.get(Integer.parseInt(posting[1]));
+
                 if (posting[0].equals(previousTerm) || previousTerm == null) {
-                    frequencyDocIdsMappingList.add(new FrequencyDocIdsMapping(Integer.parseInt(posting[2]), Long.parseLong(posting[1])));
+                    this.docs_t = termToDocCountMap.get(posting[0].toLowerCase());
+                    frequencyDocIdsMappingList.add(new FrequencyDocIdsMapping(Integer.parseInt(posting[2]), Long.parseLong(posting[1]), k1_param, b_param, len_doc_avg, len_doc, total_num_docs, docs_t));
                 } else {
                     Collections.sort(frequencyDocIdsMappingList);
                     Integer singleTierLength = Double.valueOf(Math.ceil(frequencyDocIdsMappingList.size())).intValue();
@@ -130,7 +178,8 @@ class InvertedIndexSingleTier {
                     totalBytesSingleTier += totalBytesForTerm;
                     totalBytesDocIdsFreqs = new StringBuffer();
                     frequencyDocIdsMappingList.clear();
-                    frequencyDocIdsMappingList.add(new FrequencyDocIdsMapping(Integer.parseInt(posting[2]), Long.parseLong(posting[1])));
+                    this.docs_t = termToDocCountMap.get(posting[0].toLowerCase());
+                    frequencyDocIdsMappingList.add(new FrequencyDocIdsMapping(Integer.parseInt(posting[2]), Long.parseLong(posting[1]), k1_param, b_param, len_doc_avg, len_doc, total_num_docs, docs_t));
                 }
                 previousTerm = posting[0];
             }
@@ -147,6 +196,10 @@ class InvertedIndexSingleTier {
         long startTime = System.currentTimeMillis();
 
         InvertedIndexSingleTier index = new InvertedIndexSingleTier("data/1_intermediate/postings/sorted.gz", "data/2_index/lexiconSingleTier.gz", "data/2_index/invertedIndexSingleTier");
+
+        index.buildDocIDToWordCountMap("data/2_index/url_doc_mapping.gz");
+        index.buildTermToDocCountMap("data/1_intermediate/postings/sorted.gz");
+
         if (index.ifLexiconAndInvertedIndexDocumentCreated())
             index.createIndex();
         System.out.println("Total time =" + (System.currentTimeMillis() - startTime) / 60000.0);

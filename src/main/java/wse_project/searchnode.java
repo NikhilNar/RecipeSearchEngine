@@ -1,11 +1,15 @@
 package wse_project;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.PriorityQueue;
 import java.util.Map;
+import java.util.zip.GZIPOutputStream;
 
 class HeapKV implements Comparable<HeapKV> {
     private int key;
@@ -23,10 +27,17 @@ class SearchNode_MultiTier {
     ArrayList<ArrayList<Integer>> freqLists;
     ArrayList<ArrayList<Integer>> docIDLists;
 
-    SearchNode_MultiTier() {
+    FileWriter queryLogOutStream;
+    File queryLog;
+
+    SearchNode_MultiTier() throws IOException {
         freqLists = new ArrayList<ArrayList<Integer>>();
         docIDLists = new ArrayList<ArrayList<Integer>>();
         docs_per_term = new ArrayList<Integer>();
+
+        String queryLogPath = "data/3_log/query_log.txt";
+        this.queryLog = new File(queryLogPath);
+        this.queryLogOutStream = new FileWriter(queryLog, true);
     }
 
     public int intersection(Integer num_lists) {
@@ -45,16 +56,17 @@ class SearchNode_MultiTier {
     }
 
     public void loadTier1(String[] query_terms, HashMap<String, Term> lexiconMapTier1, String invertedIndexPathTier1) {
+        Integer offset, size;
+        Term term_cur;
 
         for (String t : query_terms) {
             if (t.length() == 0) continue;
             termList list_cur = new termList();
-            Term term_cur = lexiconMapTier1.get(t);
+            term_cur = lexiconMapTier1.get(t);
             if (term_cur != null) {
-                Integer offset = term_cur.getOffset();
-                Integer size = term_cur.getSize();
-                list_cur.loadList(invertedIndexPathTier1, offset, size);
-            }
+                offset = term_cur.getOffset();
+                size = term_cur.getSize();
+                list_cur.loadList(invertedIndexPathTier1, offset, size); }
             docIDLists.add(list_cur.docIDs);
             freqLists.add(list_cur.freqs);
             this.docs_per_term.add(list_cur.docIDs.size());
@@ -62,15 +74,16 @@ class SearchNode_MultiTier {
     }
 
     public void fallThrough(String[] query_terms, HashMap<String, Term> lexiconMapTier2, String invertedIndexPathTier2) {
-        System.out.println("(FALLING THROUGH TO TIER 2)");
+        Integer offset, size;
+        Term term_cur;
 
         for (int i = 0; i < query_terms.length; ++i) {
             if (query_terms[i].length() == 0) continue;
             termList list_cur = new termList();
-            Term term_cur = lexiconMapTier2.get(query_terms[i]);
+            term_cur = lexiconMapTier2.get(query_terms[i]);
             if (term_cur != null) {
-                Integer offset = term_cur.getOffset();
-                Integer size = term_cur.getSize();
+                offset = term_cur.getOffset();
+                size = term_cur.getSize();
                 list_cur.loadList(invertedIndexPathTier2, offset, size);
             }
             docIDLists.get(i).addAll(list_cur.docIDs);
@@ -79,7 +92,7 @@ class SearchNode_MultiTier {
         }
     }
 
-    public ArrayList<Integer> thresholdAlgo(int k, String query, HashMap<String, Term> lexiconMapTier1, HashMap<String, Term> lexiconMapTier2, String invertedIndexPathTier1, String invertedIndexPathTier2) {
+    public ArrayList<Integer> thresholdAlgo(int k, String query, HashMap<String, Term> lexiconMapTier1, HashMap<String, Term> lexiconMapTier2, String invertedIndexPathTier1, String invertedIndexPathTier2) throws IOException {
         /*
         :param k:  target num results to be returned
         :param docs_per_term:
@@ -91,7 +104,18 @@ class SearchNode_MultiTier {
 
         this.loadTier1(query_terms, lexiconMapTier1, invertedIndexPathTier1);
 
-        if (this.intersection(query_terms.length) < k) this.fallThrough(query_terms, lexiconMapTier2, invertedIndexPathTier2);
+        int num_intersect_tier1 = this.intersection(query_terms.length);
+
+        System.out.println("* " + num_intersect_tier1 + " documents in Tier 1 contain all query terms. *");
+
+        if (num_intersect_tier1 <= k / 10 && num_intersect_tier1 > 0) {
+            System.out.println("( FALLING THROUGH TO TIER 2. )");
+            this.fallThrough(query_terms, lexiconMapTier2, invertedIndexPathTier2);
+            this.queryLogOutStream.write("2 " + query + "\n");
+        } else {
+            System.out.println("( EXECUTING QUERY IN TIER 1 ONLY. )");
+            this.queryLogOutStream.write("1 " + query + "\n");
+        }
 
         int threshold = 0;
         int n_terms = query_terms.length;
@@ -132,7 +156,6 @@ class SearchNode_MultiTier {
                             }
                         }
                     }
-
                     int cur = seen_value.get(docID);
 
                     if (minHeap.size() < k)
@@ -141,7 +164,6 @@ class SearchNode_MultiTier {
                         minHeap.add(new HeapKV(cur, docID));
                         minHeap.poll(); }
                 }
-
                 threshold += freq;
             }
             kth = minHeap.peek();
@@ -154,6 +176,7 @@ class SearchNode_MultiTier {
             ++m;
         }
         Collections.reverse(results);
+        this.queryLogOutStream.close();
         return results;
     }
 
@@ -166,19 +189,22 @@ class SearchNode_SingleTier {
     ArrayList<ArrayList<Integer>> docIDLists;
 
     SearchNode_SingleTier() {
-        freqLists = new ArrayList<ArrayList<Integer>>();
-        docIDLists = new ArrayList<ArrayList<Integer>>();
-        docs_per_term = new ArrayList<Integer>();
+        this.freqLists = new ArrayList<ArrayList<Integer>>();
+        this.docIDLists = new ArrayList<ArrayList<Integer>>();
+        this.docs_per_term = new ArrayList<Integer>();
     }
 
     public void loadIndex(String[] query_terms, HashMap<String, Term> lexiconMapSingleTier, String invertedIndexPathSingleTier) {
+        Integer offset, size;
+        Term term_cur;
+
         for (String t : query_terms) {
             if (t.length() == 0) continue;
             termList list_cur = new termList();
-            Term term_cur = lexiconMapSingleTier.get(t);
+            term_cur = lexiconMapSingleTier.get(t);
             if (term_cur != null) {
-                Integer offset = term_cur.getOffset();
-                Integer size = term_cur.getSize();
+                offset = term_cur.getOffset();
+                size = term_cur.getSize();
                 list_cur.loadList(invertedIndexPathSingleTier, offset, size);
             }
             docIDLists.add(list_cur.docIDs);
