@@ -82,7 +82,7 @@ public class GenerateQuery {
             }
 
             Random r = new Random();
-            int num_queries = 1000;
+            int num_queries = 1000000;
             HashSet<String> queryBank = new HashSet();
             for(int i=0; i < num_queries; ++i){
                 Double randProb1, randProb2;

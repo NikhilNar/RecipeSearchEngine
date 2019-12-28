@@ -111,10 +111,10 @@ class SearchNode_MultiTier {
         if (num_intersect_tier1 <= k / 10 && num_intersect_tier1 > 0) {
             System.out.println("( FALLING THROUGH TO TIER 2. )");
             this.fallThrough(query_terms, lexiconMapTier2, invertedIndexPathTier2);
-            this.queryLogOutStream.write("2 " + query + "\n");
+//            this.queryLogOutStream.write("2 " + query + "\n");
         } else {
             System.out.println("( EXECUTING QUERY IN TIER 1 ONLY. )");
-            this.queryLogOutStream.write("1 " + query + "\n");
+//            this.queryLogOutStream.write("1 " + query + "\n");
         }
 
         int threshold = 0;
@@ -176,6 +176,7 @@ class SearchNode_MultiTier {
             ++m;
         }
         Collections.reverse(results);
+//        if (results.size() == k) this.queryLogOutStream.write(query + "\n");      // FOR QUERY PREPROCESSING ONLY - DELIBERATELY COMMENTED OUT
         this.queryLogOutStream.close();
         return results;
     }

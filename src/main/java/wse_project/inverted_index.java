@@ -242,18 +242,23 @@ class InvertedIndex {
     }
 
     public static void main(String[] args) {
-        long startTime = System.currentTimeMillis();
-
         // :tier_1_split:   defines percentage of term lists to be included in Tier 1
         double tier_1_split = 20.0;
+        String tier_1_split_str = "20";
 
-        InvertedIndex index = new InvertedIndex("data/1_intermediate/postings/sorted.gz", "data/2_index/lexiconTier1.gz", "data/2_index/lexiconTier2.gz", "data/2_index/invertedIndexTier1", "data/2_index/invertedIndexTier2", tier_1_split);
+        String dataIntermediateDir = "data/1_intermediate/", dataIndexDir = "data/2_index/";
+        String sortedTermsFilePath = dataIntermediateDir + "postings/sorted.gz";
+        String lexiconTier1FilePath = dataIndexDir + "lexiconTier1_" + tier_1_split_str + ".gz";
+        String lexiconTier2FilePath = dataIndexDir + "lexiconTier2_" + tier_1_split_str + ".gz";
+        String invertedIndexTier1Path = dataIndexDir + "invertedIndexTier1_" + tier_1_split_str;
+        String invertedIndexTier2Path = dataIndexDir + "invertedIndexTier2_" + tier_1_split_str;
+        String urlDocMappingPath = dataIndexDir + "url_doc_mapping.gz";
 
-        index.buildDocIDToWordCountMap("data/2_index/url_doc_mapping.gz");
-        index.buildTermToDocCountMap("data/1_intermediate/postings/sorted.gz");
-
-        if (index.ifLexiconAndInvertedIndexDocumentCreated())
-            index.createIndex();
+        long startTime = System.currentTimeMillis();
+        InvertedIndex index = new InvertedIndex(sortedTermsFilePath, lexiconTier1FilePath, lexiconTier2FilePath, invertedIndexTier1Path, invertedIndexTier2Path, tier_1_split);
+        index.buildDocIDToWordCountMap(urlDocMappingPath);
+        index.buildTermToDocCountMap(sortedTermsFilePath);
+        if (index.ifLexiconAndInvertedIndexDocumentCreated()) index.createIndex();
         System.out.println("Total time =" + (System.currentTimeMillis() - startTime) / 60000.0);
     }
 

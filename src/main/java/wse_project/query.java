@@ -326,25 +326,35 @@ class MainQueryProgram {
                 ++divisor;
                 ap += (float)num_true_pos/(i + 1);}}
         ap /= divisor;
-        return ap;
+        ap *= ((float)multiTierResults.size() / (float)singleTierResults.size());
+        return Float.isNaN(ap) ? 0.5f : ap;
     }
 
     public static void main(String[] args) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        System.out.println("\n------TIER 1 SPLIT PERCENTAGE------");
+        System.out.println("[10] - more computational cost saving, lower MAP");
+        System.out.println("[20] - slightly less computational cost saving, greater MAP");
+        System.out.print("Enter [10] to use 10% Tier 1 split, or [20] to use 20% Tier 1 split: ");
+
+        String tier_1_split_str = br.readLine();
+
         // DECLARE PATHS
         String dataIndexDir = "data/2_index/";
         String urlDocMappingPath = dataIndexDir + "url_doc_mapping.gz";
-        String queriesPath = "data/1_intermediate/queries/queries.gz";
+//        String queriesPath = "data/1_intermediate/queries/queries.gz";
+        String queriesPath = "data/1_intermediate/queries/queries_3terms.txt";
+
 //        String queriesPath = "data/3_log/dnu_50_3terms_2/tier1_queries.txt";
-        String lexiconTier1Path = dataIndexDir + "lexiconTier1.gz";
-        String lexiconTier2Path = dataIndexDir + "lexiconTier2.gz";
-        String indexTier1Path = dataIndexDir + "invertedIndexTier1";
-        String indexTier2Path = dataIndexDir + "invertedIndexTier2";
+        String lexiconTier1Path = dataIndexDir + "lexiconTier1_" + tier_1_split_str + ".gz";
+        String lexiconTier2Path = dataIndexDir + "lexiconTier2_" + tier_1_split_str + ".gz";
+        String indexTier1Path = dataIndexDir + "invertedIndexTier1_" + tier_1_split_str;
+        String indexTier2Path = dataIndexDir + "invertedIndexTier2_" + tier_1_split_str;
         String lexiconSingleTierPath = dataIndexDir + "lexiconSingleTier.gz";
         String indexSingleTierPath = dataIndexDir + "invertedIndexSingleTier";
 
         MainQueryProgram query = new MainQueryProgram();
 
-        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
         System.out.print("Enter target # of results to be returned: ");
         String records = br.readLine();
         System.out.print("Enter [1] to execute batch query, or [0] to manually enter queries: ");
@@ -360,8 +370,8 @@ class MainQueryProgram {
         query_single.buildLexicon(lexiconSingleTierPath, query_single.getLexiconMapSingleTier());
         query_single.buildDocIDsToUrlMapping(urlDocMappingPath);
 
-        GZIPInputStream queries = new GZIPInputStream(new FileInputStream(queriesPath));
-//        FileInputStream queries = new FileInputStream(queriesPath);
+//        GZIPInputStream queries = new GZIPInputStream(new FileInputStream(queriesPath));
+        FileInputStream queries = new FileInputStream(queriesPath);
         BufferedReader queries_br = new BufferedReader(new InputStreamReader(queries));
 
         long startTime;
@@ -373,10 +383,13 @@ class MainQueryProgram {
         if (batchQueryFlag.equals("1")) {
             // BATCH EXECUTE QUERIES, MEASURE M.A.P.
             // COMPARE QUERY TIME FOR SINGLE VS. MULTI-TIER
-            int i = 0;
-            while ((current_query = queries_br.readLine()) != null) {
-                if (i % 10 == 0) System.out.println("# of queries executed: " + i);
+            System.out.print("Enter # of queries to execute in batch (up to 60000): ");
+            String num_queries = br.readLine();
 
+            int i = 0;
+            while ((current_query = queries_br.readLine()) != null && i < Integer.parseInt(num_queries)) {
+                if (i % 10 == 0) System.out.println("# of queries executed: " + i + "\n");
+                System.out.println("QUERY: " + current_query);
                 startTime = System.currentTimeMillis();
                 ArrayList<Integer> results_multi = query_multi.getSearchResults_MultiTier(current_query, Integer.parseInt(records));
                 multitier_time += ((System.currentTimeMillis() - startTime) / 1000.0);
@@ -394,6 +407,8 @@ class MainQueryProgram {
                 ++i;
             }
             mean_average_precision /= i;
+            System.out.println("Tier 1 Split Percentage: " + tier_1_split_str);
+            System.out.println("Target # of results returned per query: " + records);
             System.out.println("Number of queries executed: " + i);
             System.out.println("Mean Average Precision: " + mean_average_precision);
             System.out.println("Multi-Tier/Single-Tier Query Execution Time Ratio : " + multitier_time/singletier_time);
